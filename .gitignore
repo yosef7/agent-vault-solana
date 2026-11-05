@@ -1,0 +1,14 @@
+# Llaves y secretos (Solana)
+*-keypair.json
+id.json
+wallet*.json
+.env
+.env.*
+!.env.example
+
+# Generados por Anchor
+target/
+.anchor/
+test-ledger/
+node_modules/
+.DS_Store
