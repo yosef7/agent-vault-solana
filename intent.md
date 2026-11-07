@@ -4,7 +4,7 @@
 - **Evento:** [MLH Solana Hackathon](https://events.mlh.com/events/15200-solana-hackathon), 6–8 nov. 2026 (cierre final: dom 8 nov., 11:45 a. m., hora de Panamá)
 - **Tracks:** AI (y Top 3 Overall)
 - **Responsable:** José Arnulfo R. H.
-- **Última actualización:** 2026-11-06
+- **Última actualización:** 2026-11-07
 
 ## Intención
 
@@ -60,6 +60,13 @@ Ya está hecho en `programs/agent_vault/src/lib.rs`:
 - [ ] Nada desplegado en devnet; sin API, agente ni panel
 - [ ] Repositorio privado hasta H5 (se publica el sáb 7 después del ensayo)
 
+## Material H5
+
+La guía reproducible, el guion de dos minutos, los subtítulos en inglés y el
+texto de MLH están en [`DEMO.md`](DEMO.md). El material no afirma una latencia,
+una comisión, una transacción de devnet ni una integración x402 que todavía no
+estén verificadas en este checkout.
+
 ## Decisiones de diseño
 
 ### D1. Los rechazos por política no revierten la transacción
@@ -82,6 +89,50 @@ En Solana, si una instrucción falla se pierde **todo**, incluidos los eventos y
 - `request_hash = sha256(JSON canónico de la solicitud)`: URL del recurso, proveedor, monto, motivo escrito por el agente y *nonce* del `402`. El JSON completo se guarda fuera de la cadena (en el panel o la API) y cualquiera puede recalcular el hash.
 - Quien paga la renta del recibo es el agente (mejora futura: cerrar recibos viejos para recuperarla).
 
+### D2.1. Contrato `402` con nombres compatibles con x402 v2
+
+La API sigue un flujo al estilo x402, con nombres compatibles donde el significado coincide. Esto no implica compatibilidad con un *facilitator* real ni con el SDK oficial: el esquema de pago continúa siendo propio.
+
+| Agent Vault | x402 v2 | Diferencia |
+| --- | --- | --- |
+| `price` | `amount` | Monto en unidades atómicas; x402 lo expresa como texto. |
+| `recipient` | `payTo` | Destinatario de la transferencia. |
+| `asset` | `asset` | Misma semántica; x402 espera dirección o identificador del activo. |
+| `resource` | `resource.url` | x402 agrupa URL y metadatos del recurso en un objeto. |
+| `expires_at` | `maxTimeoutSeconds` | x402 expresa una ventana máxima en segundos, no una fecha absoluta. |
+| `network` | `network` | x402 usa identificadores CAIP-2; conservar ese formato en la integración. |
+| `scheme` | `scheme` | El valor permanece propio: `"agent-vault-v0"`, no `"exact"`. |
+| `nonce` | Sin equivalente central | Campo propio para evitar repetición. |
+| `vault` | Sin equivalente central | Campo propio para identificar la bóveda y su política. |
+
+En HTTP, la respuesta `402` usa el encabezado `PAYMENT-REQUIRED`; el reintento del cliente usa `PAYMENT-SIGNATURE`, y el servidor puede devolver `PAYMENT-RESPONSE`. Los tres transportan JSON codificado en base64. El cuerpo de `PaymentRequired` v2 se representa así:
+
+```json
+{
+  "x402Version": 2,
+  "resource": {
+    "url": "/v1/research?q=solana+fees",
+    "description": "Research data",
+    "mimeType": "application/json"
+  },
+  "accepts": [
+    {
+      "scheme": "agent-vault-v0",
+      "network": "<CAIP-2 DEVNET NETWORK>",
+      "amount": "10000",
+      "asset": "<MINT>",
+      "payTo": "<MERCHANT_PUBKEY>",
+      "maxTimeoutSeconds": 300,
+      "extra": {
+        "merchantTokens": "<MERCHANT_ATA>",
+        "nonce": "<uuid v4>",
+        "vault": "<VAULT_PUBKEY>"
+      }
+    }
+  ]
+}
+```
+
 ### D3. Aprobación humana
 
 - `approve_payment(receipt)`, firmada por el dueño: si el recibo está `Pending`, vuelve a validar la pausa y el tope diario, transfiere y lo marca `Paid`.
@@ -95,6 +146,18 @@ En Solana, si una instrucción falla se pierde **todo**, incluidos los eventos y
 ### D5. `agent_pay` se mantiene
 
 Queda como ruta simple y compatible con las pruebas actuales. La demo y la API usan `request_payment`. Si sobra tiempo, `agent_pay` se elimina o pasa a delegar en la nueva instrucción.
+
+### D6. La red se valida por genesis hash
+
+Todo cliente o script debe comprobar `getGenesisHash` antes de firmar o enviar transacciones. Devnet se acepta únicamente con su genesis hash verificado; Localnet requiere `SOLANA_LOCALNET_GENESIS_HASH`, porque su hash depende de la instancia. Una discrepancia detiene el proceso en lugar de confiar en el nombre del endpoint.
+
+### D7. El panel no adopta la plantilla `kit/react-vite`
+
+Se revisó la plantilla oficial `solana-foundation/templates/kit/react-vite`. Aunque usa React y Vite, su manifest depende de `@solana/client` y `@solana/react-hooks`, una pila distinta de la elegida para Agent Vault. Se descarta para evitar mezclar APIs: el panel H4 usará `@solana/kit`, `@solana/react` y el cliente generado con Codama.
+
+### D8. MCP de documentación de Solana conectado
+
+Claude Code tiene configurado el servidor MCP `solana` en `https://mcp.solana.com/mcp` y lo reporta conectado. Se usará solo para consultar documentación vigente de Anchor y `@solana/kit`; la configuración pertenece al entorno local y no se guarda en este repositorio.
 
 ## Especificación del programa
 

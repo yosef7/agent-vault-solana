@@ -4,11 +4,13 @@ import { resolve } from 'node:path';
 import * as anchor from '@coral-xyz/anchor';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { assertSolanaNetwork } from '../clients/js/src/network-guard.js';
 
 const root = resolve(new URL('.', import.meta.url).pathname, '..');
 const config = JSON.parse(
   await readFile(resolve(root, 'config/devnet.json'), 'utf8'),
 ) as {
+  cluster: 'devnet' | 'localnet';
   rpcUrl: string;
   programId: string;
   vault: string;
@@ -16,6 +18,10 @@ const config = JSON.parse(
   mint: string;
   merchantTokens: { research: string };
 };
+await assertSolanaNetwork(
+  config.rpcUrl,
+  config.cluster,
+);
 const agent = anchor.web3.Keypair.fromSecretKey(
   Uint8Array.from(
     JSON.parse(
@@ -39,6 +45,7 @@ const [receipt] = PublicKey.findProgramAddressSync(
   [Buffer.from('receipt'), new PublicKey(config.vault).toBuffer(), requestHash],
   new PublicKey(config.programId),
 );
+const startedAt = performance.now();
 const signature = await program.methods
   .requestPayment(Array.from(requestHash), new anchor.BN(10_000))
   .accounts({
@@ -52,6 +59,13 @@ const signature = await program.methods
     systemProgram: SystemProgram.programId,
   })
   .rpc();
+// B3: time from send to 'confirmed' and the real fee, for the README median.
+const confirmMs = Math.round(performance.now() - startedAt);
+const tx = await provider.connection.getTransaction(signature, {
+  commitment: 'confirmed',
+  maxSupportedTransactionVersion: 0,
+});
+const feeLamports = tx?.meta?.fee ?? null;
 const result = await (
   program.account as unknown as {
     receipt: {
@@ -71,6 +85,10 @@ console.log(
       amount: result.amount.toString(),
       status: result.status,
       requestHash: Buffer.from(result.requestHash).toString('hex'),
+      cluster: config.cluster,
+      confirmMs,
+      feeLamports,
+      measuredAt: new Date().toISOString(),
     },
     null,
     2,

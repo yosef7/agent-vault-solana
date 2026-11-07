@@ -2,18 +2,18 @@
   "cluster": "devnet",
   "rpcUrl": "https://api.devnet.solana.com",
   "programId": "41pzYtwB4MJV2c7uyhEqSUYc3awtekzsPiAGLiPr4Fvi",
-  "mint": "",
-  "vault": "",
-  "vaultTokens": "",
-  "maria": "",
-  "agent": "",
+  "mint": "6ojpv2rHTzZoVnrURSgjwG7CQ8Ug2vVrJa51JiTmQbUt",
+  "vault": "DnZHqRn8AbCuXG5EBi76PQdRe4vH7EXZ6beF5BQbfhYJ",
+  "vaultTokens": "FdGcHi2dNE74DwgqHKDYUJeULs7o4V9V6G3b22VhftK2",
+  "maria": "Aor6zUrxNr8gJ51nut1p3RjdMdhDKRPmJj6fwpc85WgA",
+  "agent": "2DxnqiSQCVTsTcvwQDAfb2395NFCDnX9ebs8bBkMQuas",
   "merchants": {
-    "research": "",
-    "unknown": ""
+    "research": "3NqHrf67VRKfWKGB2GZaJKVGDR9FANQ5MTNiqv5pBkKL",
+    "unknown": "8b82ijy3k5J66oKFBAKDoQh4HsjX9SLmCGxA52NiJ46h"
   },
   "merchantTokens": {
-    "research": "",
-    "unknown": ""
+    "research": "AqpyqveaSc8Xv2mRsfVskCGgJdztH3qui6zBE7xyyBud",
+    "unknown": "9tzGSrkAjWFHFAjc7461HWywfaYiKyqfgY47vzdZAF5e"
   },
   "parameters": {
     "deposit": "50000000",

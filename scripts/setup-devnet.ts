@@ -10,6 +10,7 @@ import {
   createTransferCheckedInstruction,
   createMint,
   getAccount,
+  getAssociatedTokenAddressSync,
   getOrCreateAssociatedTokenAccount,
   mintTo,
 } from '@solana/spl-token';
@@ -21,9 +22,11 @@ import {
   Transaction,
   sendAndConfirmTransaction,
 } from '@solana/web3.js';
+import { assertSolanaNetwork } from '../clients/js/src/network-guard.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
+const network = process.env.SOLANA_CLUSTER ?? 'devnet';
 const programId = new PublicKey(
   process.env.AGENT_VAULT_PROGRAM_ID ??
     '41pzYtwB4MJV2c7uyhEqSUYc3awtekzsPiAGLiPr4Fvi',
@@ -79,14 +82,24 @@ async function saveKeypair(path: string, keypair: Keypair): Promise<void> {
 async function ensureSol(connection: Connection, payer: Keypair, recipient: PublicKey) {
   const balance = await connection.getBalance(recipient);
   if (balance >= 0.2 * anchor.web3.LAMPORTS_PER_SOL) return;
-  const signature = await connection.requestAirdrop(
-    recipient,
-    0.2 * anchor.web3.LAMPORTS_PER_SOL,
+  // The devnet RPC faucet is closed (HTTP 410), so fund from the payer wallet.
+  const tx = new anchor.web3.Transaction().add(
+    anchor.web3.SystemProgram.transfer({
+      fromPubkey: payer.publicKey,
+      toPubkey: recipient,
+      lamports: 0.2 * anchor.web3.LAMPORTS_PER_SOL,
+    }),
   );
-  await connection.confirmTransaction(signature, 'confirmed');
+  await anchor.web3.sendAndConfirmTransaction(connection, tx, [payer], {
+    commitment: 'confirmed',
+  });
 }
 
 async function main(): Promise<void> {
+  if (network !== 'devnet' && network !== 'localnet') {
+    throw new Error(`Unsupported SOLANA_CLUSTER "${network}". Use devnet or localnet.`);
+  }
+  await assertSolanaNetwork(rpcUrl, network);
   await mkdir(keysDir, { recursive: true });
   const maria = loadOrCreateKeypair(resolve(keysDir, 'maria-keypair.json'));
   const agent = loadOrCreateKeypair(resolve(keysDir, 'agent-keypair.json'));
@@ -133,13 +146,11 @@ async function main(): Promise<void> {
     [Buffer.from('vault'), maria.publicKey.toBuffer()],
     programId,
   )[0];
-  const vaultTokens = await getOrCreateAssociatedTokenAccount(
-    connection,
-    maria,
-    mint,
-    vault,
-    true,
-  );
+  // Only derive the address: `initialize` creates this account with `init`,
+  // so pre-creating it makes the Associated Token program fail.
+  const vaultTokens = {
+    address: getAssociatedTokenAddressSync(mint, vault, true),
+  };
   const mariaTokens = await getOrCreateAssociatedTokenAccount(
     connection,
     maria,

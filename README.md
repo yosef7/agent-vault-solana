@@ -2,7 +2,7 @@
 
 Agent Vault is an early hackathon prototype for an AI agent that pays permitted API providers with a token on Solana. An Anchor program holds the tokens in a vault account controlled by a PDA. The owner sets an agent signer, up to five permitted merchants, a daily spending cap and an approval threshold. The agent can request payments that are paid, held for approval, or rejected with an on-chain receipt.
 
-Built for the [MLH Solana Hackathon](https://events.mlh.com/events/15200-solana-hackathon), November 6–8, 2026. The current milestone is the **on-chain policy program**. The API, AI agent, dashboard, video, and public submission are still to be built. No devnet deployment has been made from this checkout.
+Built for the [MLH Solana Hackathon](https://events.mlh.com/events/15200-solana-hackathon), November 6–8, 2026. The current milestone is the **on-chain policy program**. The API, AI agent, dashboard, video, and public submission are still to be built. The program is deployed on devnet (see [Devnet deployment](#devnet-deployment)).
 
 ## How it works
 
@@ -17,6 +17,39 @@ flowchart LR
 ```
 
 The vault PDA is derived from `['vault', owner public key]`. Its associated token account holds the selected mint. `daily_limit` and payment amounts are in the mint's **base units**; for a six-decimal token, `1_000_000` units equal one token. The limit resets at midnight UTC, using the on-chain clock. The merchant restriction checks the owner of the recipient token account, so the merchant can receive to any of its accounts for the selected mint. The program currently supports the classic SPL Token program, not Token-2022.
+
+### Why Solana
+
+Solana is part of the product boundary, not just the transport:
+
+| Solana property | Agent Vault behavior | What a judge can verify |
+| --- | --- | --- |
+| Shared verification without a trusted intermediary | The client can verify the on-chain `Receipt` before returning a paid resource. | Receipt account and transaction logs |
+| Durable, shared history | Every payment attempt creates a receipt, including policy rejections. | `Paid`, `Pending`, and `Rejected` receipt states |
+| Public, reusable rules | The vault PDA enforces the agent, merchant list, pause state, mint, and daily cap. | Program ID and account constraints |
+| Fast, low-value settlement | The design targets per-request payments in token base units. | Devnet transaction, when deployed |
+| Composable account data | A provider or dashboard can read receipts without permission from the API operator. | `getProgramAccounts` filtered by vault |
+
+### Account map
+
+```mermaid
+flowchart LR
+    O["Owner wallet"] -->|initialize, approve, pause, withdraw| P["Agent Vault program"]
+    A["Agent signer"] -->|request_payment| P
+    P -->|owns| V["Vault PDA<br/>policy and daily spend"]
+    P -->|owns| R["Receipt PDA<br/>one request hash"]
+    V -->|authority of| VT["Vault token account"]
+    VT -->|transfer when allowed| MT["Merchant token account"]
+    API["Provider API"] -.->|reads| R
+```
+
+| Account | PDA seeds | Created/paid by | Purpose |
+| --- | --- | --- | --- |
+| `Vault` | `["vault", owner]` | Owner | Immutable agent, merchants, mint, cap, threshold, and pause state |
+| `Receipt` | `["receipt", vault, request_hash]` | Agent | Decision, amount, merchant, timestamps, and replay-resistant request hash |
+| Vault token account | Associated token account for `Vault` and `mint` | Owner | Holds the configured payment token |
+
+`request_payment` writes both the receipt and `spent_today`, so requests from one vault are serialized by that shared account. Different vaults do not share that account and can be processed independently.
 
 | Instruction | Authorized signer | Action |
 | --- | --- | --- |
@@ -41,6 +74,20 @@ NO_DNA=1 anchor test
 
 The test suite uses LiteSVM and does not spend devnet SOL. It covers authorized payment, rejected agent and merchant substitutions, daily cap, pause, owner withdrawal, and the UTC daily reset. No wallet key is needed for these local tests. The generated program keypair remains in `target/deploy/` and is ignored by Git.
 
+For a network-free verification, `anchor test` is the minimum reproducible check. To exercise the scripts against a local validator instead of devnet:
+
+```bash
+# Terminal 1
+NO_DNA=1 solana-test-validator
+
+# Terminal 2
+solana config set --url localhost
+SOLANA_CLUSTER=localnet SOLANA_RPC_URL=http://127.0.0.1:8899 npm run setup:devnet
+SOLANA_CLUSTER=localnet SOLANA_RPC_URL=http://127.0.0.1:8899 npm run smoke
+```
+
+The local route requires a locally deployed program and `SOLANA_LOCALNET_GENESIS_HASH` for the network guard. If that variable is not configured, use `anchor test` rather than bypassing the guard.
+
 ## Devnet demo
 
 The demo workspace contains an idempotent setup script, a Codama client, and a
@@ -54,7 +101,7 @@ deployment wallet:
 npm install
 npm run generate:client
 NO_DNA=1 anchor deploy --provider.cluster devnet
-npm run setup:devnet
+ANCHOR_WALLET=~/.config/solana/id.json npm run setup:devnet
 npm run smoke
 ```
 
@@ -66,14 +113,39 @@ resources. The keys are ignored by Git; never import them into a mainnet wallet.
 `smoke` submits a `0.01`-token `request_payment` and prints the receipt and
 transaction signature.
 
+## Devnet deployment
+
+- Program: [`41pzYtwB4MJV2c7uyhEqSUYc3awtekzsPiAGLiPr4Fvi`](https://explorer.solana.com/address/41pzYtwB4MJV2c7uyhEqSUYc3awtekzsPiAGLiPr4Fvi?cluster=devnet)
+- Vault PDA: [`DnZHqRn8AbCuXG5EBi76PQdRe4vH7EXZ6beF5BQbfhYJ`](https://explorer.solana.com/address/DnZHqRn8AbCuXG5EBi76PQdRe4vH7EXZ6beF5BQbfhYJ?cluster=devnet)
+- First paid `request_payment`: [transaction](https://explorer.solana.com/tx/szejdT3YsS2rjWjktkbMLTQVaLgrsbuwQAXMxGYkDD5oiSNg6FEK13vv5QSde4idksxN78Jymqb26GefqxDjLp7?cluster=devnet)
+
+### Measured latency and cost (devnet, not mainnet)
+
+Ten `request_payment` calls of 0.01 test token each, run with `npm run smoke` on November 7, 2026. All ten were paid.
+
+| Metric | Value |
+| --- | --- |
+| Median time from send to `confirmed` | **897 ms** (range 715–1,233 ms), measured from the client, including RPC round trips |
+| Transaction fee | **5,000 lamports** (0.000005 SOL) per payment |
+| Receipt rent deposit | 0.00147828 SOL per receipt (163 bytes); refundable only if receipts get a close instruction |
+
 ## Security boundaries and current limits
 
 - The owner selects the token mint at initialization. A client must verify the mint address before claiming payments are in USDC.
 - The policy currently permits up to **five merchants**. The owner cannot edit the agent, merchant list or cap after initialization. Pausing is the immediate response if an agent signer is compromised.
 - `request_payment` records policy decisions in a `Receipt` PDA derived from the vault and request hash; the same hash cannot be submitted twice.
 - `agent_pay` and `request_payment` enforce their rules in the program; the API provider and any agent client are outside this boundary.
-- The program has local tests but has not been audited or deployed to devnet. Use test tokens only.
+- The program has local tests and runs on devnet, but it has not been audited. Use test tokens only.
+- Receipts are public: observers can see the amount, merchant, and timestamps. The payment reason remains off-chain; only its `request_hash` is committed. Confidential transfers are a future Token-2022 evaluation, not part of this prototype.
 - No private keys or seed phrases belong in this repository. The `.gitignore` excludes local keypairs, environment files and build artifacts.
+
+### Security model
+
+The program verifies the signer for each role, derives the vault and receipt addresses from fixed seeds, checks the configured mint and token-account owners, and uses checked arithmetic for the daily cap. The owner alone can pause, approve, reject, or withdraw; the configured agent cannot change policy. The API and agent process remain outside the chain, and the demo keypairs are local files, so this prototype is not an audited custody system.
+
+## Demo and submission
+
+The two-minute recording plan, rehearsal checklist, English subtitle script, and submission copy are in [`DEMO.md`](DEMO.md). The current honest demo boundary is the Anchor/LiteSVM program and the local/devnet scripts; do not describe an API, AI agent, dashboard, or devnet transaction as shipped until it exists in the checkout.
 
 ## Next milestone
 
