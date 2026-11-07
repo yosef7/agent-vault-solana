@@ -9,11 +9,13 @@
   "agent": "2DxnqiSQCVTsTcvwQDAfb2395NFCDnX9ebs8bBkMQuas",
   "merchants": {
     "research": "3NqHrf67VRKfWKGB2GZaJKVGDR9FANQ5MTNiqv5pBkKL",
-    "unknown": "8b82ijy3k5J66oKFBAKDoQh4HsjX9SLmCGxA52NiJ46h"
+    "unknown": "8b82ijy3k5J66oKFBAKDoQh4HsjX9SLmCGxA52NiJ46h",
+    "external": "7byVB6FFy7uJ16dBZPRXrHEZSVor1X3zkPTgKEZ2HUem"
   },
   "merchantTokens": {
     "research": "AqpyqveaSc8Xv2mRsfVskCGgJdztH3qui6zBE7xyyBud",
-    "unknown": "9tzGSrkAjWFHFAjc7461HWywfaYiKyqfgY47vzdZAF5e"
+    "unknown": "9tzGSrkAjWFHFAjc7461HWywfaYiKyqfgY47vzdZAF5e",
+    "external": "8iWteK8LKcMJKjvYAJJNmUetvYey1bfboNtYKanVms7K"
   },
   "parameters": {
     "deposit": "50000000",

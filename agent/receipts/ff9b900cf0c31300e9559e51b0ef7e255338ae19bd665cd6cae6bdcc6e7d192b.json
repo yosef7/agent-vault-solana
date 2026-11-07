@@ -1,0 +1,9 @@
+{
+  "task": "Use an external provider that is not in the approved list.",
+  "api": "external",
+  "amount": 10000,
+  "reason": "Scenario 3: selected External Unlisted API because it matches the requested task.",
+  "nonce": "3-1794076111310",
+  "canonical": "{\"task\":\"Use an external provider that is not in the approved list.\",\"api\":\"external\",\"amount\":10000,\"reason\":\"Scenario 3: selected External Unlisted API because it matches the requested task.\",\"nonce\":\"3-1794076111310\"}",
+  "requestHash": "ff9b900cf0c31300e9559e51b0ef7e255338ae19bd665cd6cae6bdcc6e7d192b"
+}

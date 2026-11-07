@@ -1,8 +1,8 @@
 # Agent Vault (Solana)
 
-Agent Vault is an early hackathon prototype for an AI agent that pays permitted API providers with a token on Solana. An Anchor program holds the tokens in a vault account controlled by a PDA. The owner sets an agent signer, up to five permitted merchants, a daily spending cap and an approval threshold. The agent can request payments that are paid, held for approval, or rejected with an on-chain receipt.
+Agent Vault is a spending account for AI agents that pays permitted API providers with a test USD stablecoin on Solana without giving the agent a free-spending wallet. An Anchor program holds the tokens in a PDA-controlled vault. The owner sets an agent signer, up to five permitted merchants, a daily spending cap and an approval threshold. The agent can request payments that are paid, held for approval, or rejected with an on-chain receipt.
 
-Built for the [MLH Solana Hackathon](https://events.mlh.com/events/15200-solana-hackathon), November 6–8, 2026. The current milestone is the **on-chain policy program**. The API, AI agent, dashboard, video, and public submission are still to be built. The program is deployed on devnet (see [Devnet deployment](#devnet-deployment)).
+Built for the [MLH Solana Hackathon](https://events.mlh.com/events/15200-solana-hackathon), November 6–8, 2026. The current milestone is the **on-chain policy program plus deterministic AI-agent demo**. The API, dashboard, video, and public submission remain outside this checkout. The program and demo scenarios are deployed on devnet (see [Devnet deployment](#devnet-deployment)).
 
 ## How it works
 
@@ -27,7 +27,7 @@ Solana is part of the product boundary, not just the transport:
 | Shared verification without a trusted intermediary | The client can verify the on-chain `Receipt` before returning a paid resource. | Receipt account and transaction logs |
 | Durable, shared history | Every payment attempt creates a receipt, including policy rejections. | `Paid`, `Pending`, and `Rejected` receipt states |
 | Public, reusable rules | The vault PDA enforces the agent, merchant list, pause state, mint, and daily cap. | Program ID and account constraints |
-| Fast, low-value settlement | The design targets per-request payments in token base units. | Devnet transaction, when deployed |
+| Fast, low-value settlement | The design targets per-request payments in token base units. | Ten devnet transactions measured below |
 | Composable account data | A provider or dashboard can read receipts without permission from the API operator. | `getProgramAccounts` filtered by vault |
 
 ### Account map
@@ -113,6 +113,38 @@ resources. The keys are ignored by Git; never import them into a mainnet wallet.
 `smoke` submits a `0.01`-token `request_payment` and prints the receipt and
 transaction signature.
 
+The AI demo runs three fixed, repeatable scenarios:
+
+```bash
+npm run agent -- --scenario 1 # allowed, below threshold: Paid
+npm run agent -- --scenario 2 # allowed, above threshold: Pending
+npm run agent -- --scenario 3 # unlisted provider: Rejected
+npm run approve -- <pending-receipt-pda>
+npm run verify -- <receipt-pda>
+```
+
+The agent calls Claude when `ANTHROPIC_API_KEY` is present and otherwise uses an
+explicit deterministic demo decision. In both modes, the selected catalog entry
+and amount are validated before signing. Each reason is saved under
+`agent/receipts/` and committed in the receipt's `request_hash`.
+
+### AI angle
+
+The agent chooses a paid API from a local catalog, explains the choice, and
+requests payment once. Solana enforces the allowlist, daily cap and approval
+threshold; the canonical request hash lets anyone verify that the off-chain
+reason matches the on-chain commitment.
+
+### DeFi angle
+
+Agent Vault is non-custodial treasury management for autonomous agents. Funds
+sit in a PDA-owned token account that no server controls; the owner's risk
+policy (merchant allowlist, daily cap, approval threshold and emergency pause)
+is enforced by the program on every transfer; large payments are escrowed until
+a human co-signs, a lightweight 2-of-2 between agent and owner; and the owner
+can withdraw at any time. Every attempt, including rejections, leaves an
+auditable on-chain receipt.
+
 ## Devnet deployment
 
 - Program: [`41pzYtwB4MJV2c7uyhEqSUYc3awtekzsPiAGLiPr4Fvi`](https://explorer.solana.com/address/41pzYtwB4MJV2c7uyhEqSUYc3awtekzsPiAGLiPr4Fvi?cluster=devnet)
@@ -136,6 +168,9 @@ Ten `request_payment` calls of 0.01 test token each, run with `npm run smoke` on
 - `request_payment` records policy decisions in a `Receipt` PDA derived from the vault and request hash; the same hash cannot be submitted twice.
 - `agent_pay` and `request_payment` enforce their rules in the program; the API provider and any agent client are outside this boundary.
 - The program has local tests and runs on devnet, but it has not been audited. Use test tokens only.
+- Each receipt currently locks approximately `0.00147828 SOL` of refundable rent.
+  `close_receipt` is the first planned follow-up; receipts are not closed by
+  today's demo.
 - Receipts are public: observers can see the amount, merchant, and timestamps. The payment reason remains off-chain; only its `request_hash` is committed. Confidential transfers are a future Token-2022 evaluation, not part of this prototype.
 - No private keys or seed phrases belong in this repository. The `.gitignore` excludes local keypairs, environment files and build artifacts.
 
@@ -145,8 +180,14 @@ The program verifies the signer for each role, derives the vault and receipt add
 
 ## Demo and submission
 
-The two-minute recording plan, rehearsal checklist, English subtitle script, and submission copy are in [`DEMO.md`](DEMO.md). The current honest demo boundary is the Anchor/LiteSVM program and the local/devnet scripts; do not describe an API, AI agent, dashboard, or devnet transaction as shipped until it exists in the checkout.
+The two-minute recording plan, rehearsal checklist, English subtitle script,
+and submission copy are in [`DEMO.md`](DEMO.md). The live demo is the devnet
+program plus the terminal agent; there is no HTTP API or dashboard in this
+submission. The x402-shaped API and dashboard remain future work.
 
 ## Next milestone
 
-Connect a small API to a client that requests a response, receives a `402`, pays the configured merchant through `agent_pay`, and retries with a transaction receipt. Verify the receipt and prevent replay before returning a paid response. Then add a simple dashboard for the owner and record a two-minute demo.
+Connect a small API to a client that requests a response, receives a `402`, pays
+the configured merchant, and retries with a transaction receipt. Add
+`close_receipt` to recover rent, then add a simple owner dashboard and a real
+x402 facilitator integration.

@@ -12,7 +12,12 @@
   "scripts": {
     "generate:client": "codama run js",
     "setup:devnet": "tsx scripts/setup-devnet.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "agent": "tsx agent/src/run.ts",
+    "approve": "tsx scripts/approve.ts",
+    "verify": "tsx scripts/verify-receipt.ts",
+    "pause": "tsx scripts/pause.ts",
+    "withdraw": "tsx scripts/withdraw.ts"
   },
   "devDependencies": {
     "codama": "^1.11.0",

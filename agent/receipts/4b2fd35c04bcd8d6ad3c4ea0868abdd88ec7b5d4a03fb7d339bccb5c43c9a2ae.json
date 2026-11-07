@@ -1,0 +1,9 @@
+{
+  "task": "Buy the premium research report.",
+  "api": "premium-report",
+  "amount": 5000000,
+  "reason": "Scenario 2: selected Premium Research API because it matches the requested task.",
+  "nonce": "2-1794076099891",
+  "canonical": "{\"task\":\"Buy the premium research report.\",\"api\":\"premium-report\",\"amount\":5000000,\"reason\":\"Scenario 2: selected Premium Research API because it matches the requested task.\",\"nonce\":\"2-1794076099891\"}",
+  "requestHash": "4b2fd35c04bcd8d6ad3c4ea0868abdd88ec7b5d4a03fb7d339bccb5c43c9a2ae"
+}

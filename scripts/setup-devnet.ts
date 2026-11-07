@@ -44,8 +44,8 @@ type DemoConfig = {
   vaultTokens: string;
   maria: string;
   agent: string;
-  merchants: { research: string; unknown: string };
-  merchantTokens: { research: string; unknown: string };
+  merchants: { research: string; unknown: string; external: string };
+  merchantTokens: { research: string; unknown: string; external: string };
   parameters: {
     deposit: string;
     dailyLimit: string;
@@ -109,11 +109,15 @@ async function main(): Promise<void> {
   const unknown = loadOrCreateKeypair(
     resolve(keysDir, 'merchant-unknown-keypair.json'),
   );
+  const external = loadOrCreateKeypair(
+    resolve(keysDir, 'merchant-external-keypair.json'),
+  );
   await Promise.all([
     saveKeypair(resolve(keysDir, 'maria-keypair.json'), maria),
     saveKeypair(resolve(keysDir, 'agent-keypair.json'), agent),
     saveKeypair(resolve(keysDir, 'merchant-research-keypair.json'), research),
     saveKeypair(resolve(keysDir, 'merchant-unknown-keypair.json'), unknown),
+    saveKeypair(resolve(keysDir, 'merchant-external-keypair.json'), external),
   ]);
 
   const devWallet = anchor.Wallet.local();
@@ -140,6 +144,12 @@ async function main(): Promise<void> {
     maria,
     mint,
     unknown.publicKey,
+  );
+  const externalTokens = await getOrCreateAssociatedTokenAccount(
+    connection,
+    maria,
+    mint,
+    external.publicKey,
   );
 
   const vault = PublicKey.findProgramAddressSync(
@@ -240,10 +250,12 @@ async function main(): Promise<void> {
     merchants: {
       research: research.publicKey.toBase58(),
       unknown: unknown.publicKey.toBase58(),
+      external: external.publicKey.toBase58(),
     },
     merchantTokens: {
       research: researchTokens.address.toBase58(),
       unknown: unknownTokens.address.toBase58(),
+      external: externalTokens.address.toBase58(),
     },
     parameters: {
       deposit: '50000000',

@@ -1,0 +1,9 @@
+{
+  "task": "Get the weather in Panama City and translate it to English.",
+  "api": "weather",
+  "amount": 10000,
+  "reason": "Scenario 1: selected Panama Weather API because it matches the requested task.",
+  "nonce": "1-1794076196582",
+  "canonical": "{\"task\":\"Get the weather in Panama City and translate it to English.\",\"api\":\"weather\",\"amount\":10000,\"reason\":\"Scenario 1: selected Panama Weather API because it matches the requested task.\",\"nonce\":\"1-1794076196582\"}",
+  "requestHash": "1b1b30a8b6b15ad5902e2e9ffc1cf5abc5597bd145a3a90375b5b13a0f29defb"
+}

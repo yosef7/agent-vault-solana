@@ -2,7 +2,7 @@
 
 - **Estado:** listo para construir · prototipo de hackathon
 - **Evento:** [MLH Solana Hackathon](https://events.mlh.com/events/15200-solana-hackathon), 6–8 nov. 2026 (cierre final: dom 8 nov., 11:45 a. m., hora de Panamá)
-- **Tracks:** AI (y Top 3 Overall)
+- **Tracks:** AI, DeFi (y Top 3 Overall)
 - **Responsable:** José Arnulfo R. H.
 - **Última actualización:** 2026-11-07
 
@@ -57,8 +57,8 @@ Ya está hecho en `programs/agent_vault/src/lib.rs`:
 - [x] Evento `PaymentMade`
 - [x] `anchor build` y `anchor test` pasan: 3 pruebas unitarias y 9 pruebas de integración LiteSVM (`programs/agent_vault/tests/vault.rs`)
 - [x] Cliente TS generado con Codama; `setup-devnet.ts` y `smoke.ts` escritos y compilando (`tsc` sin errores)
-- [ ] Nada desplegado en devnet; sin API, agente ni panel
-- [ ] Repositorio privado hasta H5 (se publica el sáb 7 después del ensayo)
+- [x] Programa desplegado en devnet; cliente, agente y scripts de demo disponibles
+- [ ] API HTTP y panel: recortados del alcance final
 
 ## Material H5
 
@@ -87,7 +87,9 @@ En Solana, si una instrucción falla se pierde **todo**, incluidos los eventos y
 - Semillas: `["receipt", vault, request_hash]`.
 - Como el PDA se crea con `init`, **no se puede usar dos veces el mismo `request_hash`**, así que un mismo pago no se puede repetir.
 - `request_hash = sha256(JSON canónico de la solicitud)`: URL del recurso, proveedor, monto, motivo escrito por el agente y *nonce* del `402`. El JSON completo se guarda fuera de la cadena (en el panel o la API) y cualquiera puede recalcular el hash.
-- Quien paga la renta del recibo es el agente (mejora futura: cerrar recibos viejos para recuperarla).
+- Quien paga la renta del recibo es el agente. Cada recibo inmoviliza
+  `0.00147828 SOL` de renta según la medición de 163 bytes; `close_receipt` es
+  la primera mejora futura para recuperarla.
 
 ### D2.1. Contrato `402` con nombres compatibles con x402 v2
 
@@ -511,7 +513,7 @@ Cuerpo del `402`:
 
 - [ ] Repositorio público con licencia MIT; sin llaves (`git log -p | grep -i "secret\|private"` vacío)
 - [ ] Ficha del proyecto: nombre, frase, descripción, tecnologías (Solana, Anchor, Rust, TypeScript, Claude), enlaces al repositorio, al video y a devnet
-- [ ] Tracks: **AI** y Top 3 Overall
+- [x] Tracks: **AI**, **DeFi** y Top 3 Overall
 - [ ] **Dom 8, 9:30 a. m.:** entrega inicial (cierra a las 10:00)
 - [ ] **Dom 8, 11:00 a. m.:** entrega final y tracks (cierra a las 11:45)
 
