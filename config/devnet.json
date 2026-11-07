@@ -1,0 +1,25 @@
+{
+  "cluster": "devnet",
+  "rpcUrl": "https://api.devnet.solana.com",
+  "programId": "41pzYtwB4MJV2c7uyhEqSUYc3awtekzsPiAGLiPr4Fvi",
+  "mint": "",
+  "vault": "",
+  "vaultTokens": "",
+  "maria": "",
+  "agent": "",
+  "merchants": {
+    "research": "",
+    "unknown": ""
+  },
+  "merchantTokens": {
+    "research": "",
+    "unknown": ""
+  },
+  "parameters": {
+    "deposit": "50000000",
+    "dailyLimit": "10000000",
+    "approvalThreshold": "1000000",
+    "queryPrice": "10000",
+    "reportPrice": "5000000"
+  }
+}

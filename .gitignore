@@ -2,6 +2,7 @@
 *-keypair.json
 id.json
 wallet*.json
+keys/
 .env
 .env.*
 !.env.example

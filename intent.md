@@ -56,8 +56,9 @@ Ya está hecho en `programs/agent_vault/src/lib.rs`:
 - [x] El proveedor se valida por el dueño de la cuenta de token destino y la lista inmutable de proveedores
 - [x] Evento `PaymentMade`
 - [x] `anchor build` y `anchor test` pasan: 3 pruebas unitarias y 9 pruebas de integración LiteSVM (`programs/agent_vault/tests/vault.rs`)
-- [ ] Nada desplegado en devnet; sin cliente, API, agente ni panel
-- [ ] Repositorio todavía privado y sin primer commit del programa
+- [x] Cliente TS generado con Codama; `setup-devnet.ts` y `smoke.ts` escritos y compilando (`tsc` sin errores)
+- [ ] Nada desplegado en devnet; sin API, agente ni panel
+- [ ] Repositorio privado hasta H5 (se publica el sáb 7 después del ensayo)
 
 ## Decisiones de diseño
 
@@ -200,7 +201,7 @@ scripts/                setup-devnet: mint de prueba, bóveda, fondos
 
 ### H1. Programa con recibos · vie 6, tarde y noche
 
-- [ ] Hacer el primer commit del estado actual y publicar el repositorio
+- [x] Hacer el primer commit del estado actual (el repositorio sigue privado; se publica en H5)
 - [x] Ampliar `Vault` (lista de proveedores, umbral) y `initialize`
 - [x] `Receipt`, `ReceiptStatus` y `RejectReason`
 - [x] `request_payment` según D1 y D2
@@ -209,7 +210,7 @@ scripts/                setup-devnet: mint de prueba, bóveda, fondos
 - [x] Pruebas LiteSVM: Paid, Pending → aprobado, Pending → rechazado, proveedor no permitido, tope, pausa, `request_hash` repetido, firmante equivocado
 - [x] `anchor build` y `anchor test` en verde
 
-**Listo cuando:** las 8 pruebas pasan y las 3 pruebas unitarias actuales siguen en verde.
+**Listo cuando:** las pruebas de integración pasan (9 al 6 nov.) y las 3 unitarias siguen en verde.
 
 ### Convenciones para H2–H5
 
@@ -256,12 +257,13 @@ Todos los hitos siguientes usan este formato:
 
 **Tareas:**
 
-- [ ] Agregar `keys/` a `.gitignore` y comprobar con `git check-ignore keys/x.json`
+- [x] Agregar `keys/` a `.gitignore` y comprobar con `git check-ignore keys/x.json` *(comprobado el 6 nov.)*
 - [ ] Generar los 4 pares de llaves; fondear a María y al agente con 0.2 SOL cada uno desde la billetera de desarrollo (el agente paga la renta de los recibos)
 - [ ] Confirmar que `declare_id!` coincide con `target/deploy/agent_vault-keypair.json`; desplegar con `anchor deploy --provider.cluster devnet`
 - [ ] Anotar el tamaño del binario y el costo real del despliegue. Presupuesto máximo: **2.5 SOL**. Si el despliegue se interrumpe, recuperar el *buffer* con `solana program close --buffers`
-- [ ] `setup-devnet.ts`: mint de prueba propio (6 decimales, autoridad de María), bóveda con los parámetros de la tabla, depósito y escritura de `config/devnet.json`
-- [ ] Generar el cliente con Codama; un `smoke.ts` que llama `request_payment` con 0.01 y lee el recibo
+- [ ] `setup-devnet.ts`: *(escrito; falta ejecutarlo en devnet)* mint de prueba propio (6 decimales, autoridad de María), bóveda con los parámetros de la tabla, depósito y escritura de `config/devnet.json`
+- [x] Generar el cliente con Codama (`clients/js/src/generated/`)
+- [ ] `smoke.ts` que llama `request_payment` con 0.01 y lee el recibo *(escrito; falta ejecutarlo)*
 - [ ] Importar la llave de María a Phantom (red devnet) para firmar desde el panel en H4
 
 **Criterios de aceptación:**
@@ -413,6 +415,7 @@ Cuerpo del `402`:
 - [ ] Entorno desde cero: `npm run setup:devnet`, luego la API, el agente y el panel siguiendo **solo** el README
 - [ ] Recorrer los 4 caminos del guion dos veces seguidas sin tocar código
 - [ ] Anotar cada tropiezo y corregir solo eso
+- [ ] **Publicar el repositorio** al terminar el ensayo (sáb 3:30 p. m.), después de revisar que no haya llaves en todo el historial (`git log -p`); límite: antes de la entrega inicial
 
 **README en inglés (sáb, 3:30 – 6:00 p. m.)**, en este orden:
 

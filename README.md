@@ -41,6 +41,31 @@ NO_DNA=1 anchor test
 
 The test suite uses LiteSVM and does not spend devnet SOL. It covers authorized payment, rejected agent and merchant substitutions, daily cap, pause, owner withdrawal, and the UTC daily reset. No wallet key is needed for these local tests. The generated program keypair remains in `target/deploy/` and is ignored by Git.
 
+## Devnet demo
+
+The demo workspace contains an idempotent setup script, a Codama client, and a
+smoke test. It uses a six-decimal test token; it is not USDC and the demo does
+not target mainnet.
+
+After building and deploying the program to devnet with the configured
+deployment wallet:
+
+```bash
+npm install
+npm run generate:client
+NO_DNA=1 anchor deploy --provider.cluster devnet
+npm run setup:devnet
+npm run smoke
+```
+
+`setup:devnet` creates the four demo keypairs under `keys/`, funds Maria and
+the agent from devnet airdrops, creates the mint and token accounts, initializes
+the vault, deposits `50_000_000` base units, and writes
+`config/devnet.json`. The command can be run again without recreating existing
+resources. The keys are ignored by Git; never import them into a mainnet wallet.
+`smoke` submits a `0.01`-token `request_payment` and prints the receipt and
+transaction signature.
+
 ## Security boundaries and current limits
 
 - The owner selects the token mint at initialization. A client must verify the mint address before claiming payments are in USDC.
