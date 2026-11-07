@@ -12,3 +12,6 @@ target/
 test-ledger/
 node_modules/
 .DS_Store
+
+# Material de aprendizaje local
+aprendizaje/
