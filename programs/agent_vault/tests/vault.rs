@@ -71,6 +71,7 @@ struct ReceiptFixture {
     vault: Pubkey,
     vault_tokens: Pubkey,
     merchant_tokens: Pubkey,
+    merchant_tokens_alt: Pubkey,
     wrong_tokens: Pubkey,
     mint: Pubkey,
 }
@@ -123,6 +124,7 @@ fn receipt_fixture(daily_limit: u64, approval_threshold: u64) -> ReceiptFixture 
         Pubkey::find_program_address(&[b"vault", owner.pubkey().as_ref()], &agent_vault::id());
     let vault_tokens = get_associated_token_address(&vault, &mint.pubkey());
     let merchant_tokens = get_associated_token_address(&merchant.pubkey(), &mint.pubkey());
+    let merchant_tokens_alt = Pubkey::new_unique();
     let wrong_tokens = get_associated_token_address(&wrong_merchant.pubkey(), &mint.pubkey());
     let initialize = anchor_lang::solana_program::instruction::Instruction::new_with_bytes(
         agent_vault::id(),
@@ -160,6 +162,11 @@ fn receipt_fixture(daily_limit: u64, approval_threshold: u64) -> ReceiptFixture 
     )
     .unwrap();
     svm.set_account(
+        merchant_tokens_alt,
+        token_account(mint.pubkey(), merchant.pubkey(), 0),
+    )
+    .unwrap();
+    svm.set_account(
         wrong_tokens,
         token_account(mint.pubkey(), wrong_merchant.pubkey(), 0),
     )
@@ -173,6 +180,7 @@ fn receipt_fixture(daily_limit: u64, approval_threshold: u64) -> ReceiptFixture 
         vault,
         vault_tokens,
         merchant_tokens,
+        merchant_tokens_alt,
         wrong_tokens,
         mint: mint.pubkey(),
     }
@@ -222,6 +230,74 @@ fn receipt_address(vault: Pubkey, request_hash: [u8; 32]) -> Pubkey {
         &agent_vault::id(),
     )
     .0
+}
+
+fn agent_pay_ix(
+    fixture: &ReceiptFixture,
+    merchant_tokens: Pubkey,
+    agent: Pubkey,
+    amount: u64,
+) -> anchor_lang::solana_program::instruction::Instruction {
+    anchor_lang::solana_program::instruction::Instruction::new_with_bytes(
+        agent_vault::id(),
+        &agent_vault::instruction::AgentPay { amount }.data(),
+        agent_vault::accounts::AgentPay {
+            vault: fixture.vault,
+            vault_tokens: fixture.vault_tokens,
+            merchant_tokens,
+            mint: fixture.mint,
+            agent,
+            token_program: TOKEN_PROGRAM_ID,
+        }
+        .to_account_metas(None),
+    )
+}
+
+// Regression: agent_pay must not settle amounts above approval_threshold
+// without the owner co-sign that request_payment + approve_payment require.
+#[test]
+fn agent_pay_rejects_amount_above_approval_threshold() {
+    let mut fixture = receipt_fixture(100, 10);
+
+    let over = agent_pay_ix(
+        &fixture,
+        fixture.merchant_tokens,
+        fixture.agent.pubkey(),
+        11,
+    );
+    let error = send(&mut fixture.svm, &fixture.agent, over).unwrap_err();
+    // VaultError::ApprovalRequired is the 14th variant: 6000 + 13.
+    assert!(error.contains("Custom(6013)"), "unexpected error: {error}");
+
+    let full_cap = agent_pay_ix(
+        &fixture,
+        fixture.merchant_tokens,
+        fixture.agent.pubkey(),
+        100,
+    );
+    assert!(send(&mut fixture.svm, &fixture.agent, full_cap).is_err());
+    assert_eq!(token_amount(&fixture.svm, &fixture.merchant_tokens), 0);
+    assert_eq!(token_amount(&fixture.svm, &fixture.vault_tokens), 200);
+
+    let vault_account = fixture.svm.get_account(&fixture.vault).unwrap();
+    let mut bytes: &[u8] = &vault_account.data;
+    let state = agent_vault::Vault::try_deserialize(&mut bytes).unwrap();
+    assert_eq!(state.spent_today, 0);
+}
+
+#[test]
+fn agent_pay_allows_amount_at_approval_threshold() {
+    let mut fixture = receipt_fixture(100, 10);
+
+    let at_threshold = agent_pay_ix(
+        &fixture,
+        fixture.merchant_tokens,
+        fixture.agent.pubkey(),
+        10,
+    );
+    send(&mut fixture.svm, &fixture.agent, at_threshold).unwrap();
+    assert_eq!(token_amount(&fixture.svm, &fixture.merchant_tokens), 10);
+    assert_eq!(token_amount(&fixture.svm, &fixture.vault_tokens), 190);
 }
 
 #[test]
@@ -456,6 +532,43 @@ fn request_payment_pending_can_be_approved() {
         agent_vault::ReceiptStatus::Paid
     ));
     assert_eq!(token_amount(&fixture.svm, &fixture.merchant_tokens), 11);
+}
+
+#[test]
+fn approve_payment_rejects_alternate_token_account_for_same_merchant() {
+    let mut fixture = receipt_fixture(100, 10);
+    let request_hash = [10; 32];
+    let receipt = receipt_address(fixture.vault, request_hash);
+    let request = request_ix(
+        &fixture,
+        request_hash,
+        fixture.merchant_tokens,
+        fixture.agent.pubkey(),
+        11,
+    );
+    send(&mut fixture.svm, &fixture.agent, request).unwrap();
+
+    let approve_alternate = anchor_lang::solana_program::instruction::Instruction::new_with_bytes(
+        agent_vault::id(),
+        &agent_vault::instruction::ApprovePayment.data(),
+        agent_vault::accounts::ApprovePayment {
+            vault: fixture.vault,
+            receipt,
+            vault_tokens: fixture.vault_tokens,
+            merchant_tokens: fixture.merchant_tokens_alt,
+            mint: fixture.mint,
+            authority: fixture.owner.pubkey(),
+            token_program: TOKEN_PROGRAM_ID,
+        }
+        .to_account_metas(None),
+    );
+    assert!(send(&mut fixture.svm, &fixture.owner, approve_alternate).is_err());
+    assert_eq!(token_amount(&fixture.svm, &fixture.merchant_tokens), 0);
+    assert_eq!(token_amount(&fixture.svm, &fixture.merchant_tokens_alt), 0);
+    assert!(matches!(
+        receipt_state(&fixture.svm, &receipt).status,
+        agent_vault::ReceiptStatus::Pending
+    ));
 }
 
 #[test]

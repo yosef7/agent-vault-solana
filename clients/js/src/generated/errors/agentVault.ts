@@ -41,8 +41,11 @@ export const AGENT_VAULT_ERROR__WRONG_MERCHANT = 0x177a; // 6010
 export const AGENT_VAULT_ERROR__INVALID_MERCHANT_COUNT = 0x177b; // 6011
 /** ReceiptNotPending: A payment receipt is not pending */
 export const AGENT_VAULT_ERROR__RECEIPT_NOT_PENDING = 0x177c; // 6012
+/** ApprovalRequired: Amount is above the approval threshold; use request_payment for owner approval */
+export const AGENT_VAULT_ERROR__APPROVAL_REQUIRED = 0x177d; // 6013
 
 export type AgentVaultError =
+  | typeof AGENT_VAULT_ERROR__APPROVAL_REQUIRED
   | typeof AGENT_VAULT_ERROR__DAILY_LIMIT_EXCEEDED
   | typeof AGENT_VAULT_ERROR__INVALID_AGENT
   | typeof AGENT_VAULT_ERROR__INVALID_AMOUNT
@@ -60,6 +63,7 @@ export type AgentVaultError =
 let agentVaultErrorMessages: Record<AgentVaultError, string> | undefined;
 if (process.env["NODE_ENV"] !== "production") {
   agentVaultErrorMessages = {
+    [AGENT_VAULT_ERROR__APPROVAL_REQUIRED]: `Amount is above the approval threshold; use request_payment for owner approval`,
     [AGENT_VAULT_ERROR__DAILY_LIMIT_EXCEEDED]: `Daily spending limit exceeded`,
     [AGENT_VAULT_ERROR__INVALID_AGENT]: `Agent address is invalid`,
     [AGENT_VAULT_ERROR__INVALID_AMOUNT]: `Amount and daily limit must be positive`,

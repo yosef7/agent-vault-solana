@@ -2,7 +2,7 @@
 
 Agent Vault is a spending account for AI agents that pays permitted API providers with a test USD stablecoin on Solana without giving the agent a free-spending wallet. An Anchor program holds the tokens in a PDA-controlled vault. The owner sets an agent signer, up to five permitted merchants, a daily spending cap and an approval threshold. The agent can request payments that are paid, held for approval, or rejected with an on-chain receipt.
 
-Built for the [MLH Solana Hackathon](https://events.mlh.com/events/15200-solana-hackathon), November 6–8, 2026. The current milestone is the **on-chain policy program plus deterministic AI-agent demo**. The API, dashboard, video, and public submission remain outside this checkout. The program and demo scenarios are deployed on devnet (see [Devnet deployment](#devnet-deployment)).
+Built for the [MLH Solana Hackathon](https://events.mlh.com/events/15200-solana-hackathon), November 6–8, 2026. The current milestone is the **on-chain policy program plus deterministic AI-agent demo**. The API and dashboard are not part of this submission. **Demo video (96 s): <https://youtu.be/O_oo8S2hwWE>.** The program and demo scenarios are deployed on devnet (see [Devnet deployment](#devnet-deployment)).
 
 ## How it works
 
@@ -57,7 +57,7 @@ flowchart LR
 | `request_payment` | Configured agent | Creates a unique receipt and pays immediately, leaves pending, or rejects without transferring |
 | `approve_payment` | Owner | Rechecks pause and daily limit, then settles a pending receipt and transfers tokens |
 | `reject_payment` | Owner | Settles a pending receipt as owner-rejected |
-| `agent_pay` | Configured agent | Compatibility route that transfers after checking recipient, pause state and daily cap |
+| `agent_pay` | Configured agent | Compatibility route that transfers after checking recipient, pause state, approval threshold and daily cap; amounts above the threshold fail with `ApprovalRequired` and must use `request_payment` |
 | `set_paused` | Owner | Stops or resumes agent payments |
 | `owner_withdraw` | Owner | Sends vault tokens to an owner-controlled token account, even while paused |
 
@@ -167,6 +167,7 @@ Ten `request_payment` calls of 0.01 test token each, run with `npm run smoke` on
 - The policy currently permits up to **five merchants**. The owner cannot edit the agent, merchant list or cap after initialization. Pausing is the immediate response if an agent signer is compromised.
 - `request_payment` records policy decisions in a `Receipt` PDA derived from the vault and request hash; the same hash cannot be submitted twice.
 - `agent_pay` and `request_payment` enforce their rules in the program; the API provider and any agent client are outside this boundary.
+- Amounts above the approval threshold can only move through `request_payment` + `approve_payment`, which requires the owner's signature. Before this fix, `agent_pay` skipped that check (reported through responsible disclosure); the program deployed on devnet keeps the old behavior until it is redeployed. See [SECURITY.md](SECURITY.md).
 - The program has local tests and runs on devnet, but it has not been audited. Use test tokens only.
 - Each receipt currently locks approximately `0.00147828 SOL` of refundable rent.
   `close_receipt` is the first planned follow-up; receipts are not closed by

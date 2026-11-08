@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,11 +6,11 @@ import * as anchor from '@coral-xyz/anchor';
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccount,
   createTransferCheckedInstruction,
   createMint,
   getAccount,
   getAssociatedTokenAddressSync,
+  getMint,
   getOrCreateAssociatedTokenAccount,
   mintTo,
 } from '@solana/spl-token';
@@ -23,6 +23,7 @@ import {
   sendAndConfirmTransaction,
 } from '@solana/web3.js';
 import { assertSolanaNetwork } from '../clients/js/src/network-guard.js';
+import { confirmTransaction } from './transaction-approval.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
@@ -55,27 +56,43 @@ type DemoConfig = {
   };
 };
 
-function loadOrCreateKeypair(path: string): Keypair {
-  return Keypair.fromSecretKey(
-    requireJson(path) ??
-      (() => {
-        const keypair = Keypair.generate();
-        return keypair.secretKey;
-      })(),
-  );
-}
-
 function requireJson(path: string): Uint8Array | undefined {
   try {
-    return Uint8Array.from(JSON.parse(readFileSync(path, 'utf8')));
-  } catch {
-    return undefined;
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    if (!Array.isArray(parsed) || parsed.length !== 64 ||
+        parsed.some((byte) => !Number.isInteger(byte) || byte < 0 || byte > 255)) {
+      throw new Error(`Invalid keypair file ${path}: expected 64 integer bytes.`);
+    }
+    return Uint8Array.from(parsed as number[]);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
   }
+}
+
+async function loadKeypair(path: string): Promise<Keypair> {
+  const secretKey = requireJson(path);
+  if (!secretKey) {
+    const keypair = Keypair.generate();
+    await saveKeypair(path, keypair);
+    return keypair;
+  }
+  const keypair = Keypair.fromSecretKey(secretKey);
+  await chmod(path, 0o600);
+  return keypair;
 }
 
 async function saveKeypair(path: string, keypair: Keypair): Promise<void> {
   await writeFile(path, JSON.stringify(Array.from(keypair.secretKey)) + '\n', {
     mode: 0o600,
+    flag: 'wx',
+  }).catch(async (error: NodeJS.ErrnoException) => {
+    if (error.code !== 'EEXIST') throw error;
+    await chmod(path, 0o600);
+    const existing = requireJson(path);
+    if (!existing || !Buffer.from(existing).equals(Buffer.from(keypair.secretKey))) {
+      throw new Error(`Refusing to overwrite mismatched keypair at ${path}.`);
+    }
   });
 }
 
@@ -101,25 +118,17 @@ async function main(): Promise<void> {
   }
   await assertSolanaNetwork(rpcUrl, network);
   await mkdir(keysDir, { recursive: true });
-  const maria = loadOrCreateKeypair(resolve(keysDir, 'maria-keypair.json'));
-  const agent = loadOrCreateKeypair(resolve(keysDir, 'agent-keypair.json'));
-  const research = loadOrCreateKeypair(
+  const maria = await loadKeypair(resolve(keysDir, 'maria-keypair.json'));
+  const agent = await loadKeypair(resolve(keysDir, 'agent-keypair.json'));
+  const research = await loadKeypair(
     resolve(keysDir, 'merchant-research-keypair.json'),
   );
-  const unknown = loadOrCreateKeypair(
+  const unknown = await loadKeypair(
     resolve(keysDir, 'merchant-unknown-keypair.json'),
   );
-  const external = loadOrCreateKeypair(
+  const external = await loadKeypair(
     resolve(keysDir, 'merchant-external-keypair.json'),
   );
-  await Promise.all([
-    saveKeypair(resolve(keysDir, 'maria-keypair.json'), maria),
-    saveKeypair(resolve(keysDir, 'agent-keypair.json'), agent),
-    saveKeypair(resolve(keysDir, 'merchant-research-keypair.json'), research),
-    saveKeypair(resolve(keysDir, 'merchant-unknown-keypair.json'), unknown),
-    saveKeypair(resolve(keysDir, 'merchant-external-keypair.json'), external),
-  ]);
-
   const devWallet = anchor.Wallet.local();
   const connection = new Connection(rpcUrl, 'confirmed');
   await ensureSol(connection, devWallet.payer, maria.publicKey);
@@ -133,6 +142,10 @@ async function main(): Promise<void> {
     null,
     decimals,
   );
+  const mintAccount = await getMint(connection, mint);
+  if (mintAccount.decimals !== decimals || mintAccount.freezeAuthority !== null) {
+    throw new Error('Configured mint does not match the expected six-decimal, non-freezable demo mint.');
+  }
   const researchTokens = await getOrCreateAssociatedTokenAccount(
     connection,
     maria,
@@ -188,18 +201,30 @@ async function main(): Promise<void> {
   const program = new anchor.Program(idl, provider);
   const account = await (
     program.account as unknown as {
-      vault: { fetchNullable(address: PublicKey): Promise<unknown> };
+      vault: { fetchNullable(address: PublicKey): Promise<{
+        authority: PublicKey; agent: PublicKey; merchants: PublicKey[];
+        merchantCount: number; mint: PublicKey; dailyLimit: anchor.BN;
+        approvalThreshold: anchor.BN;
+      } | null> };
     }
   ).vault.fetchNullable(vault);
-  if (!account) {
-    const merchants = [
-      research.publicKey,
-      unknown.publicKey,
-      PublicKey.default,
-      PublicKey.default,
-      PublicKey.default,
-    ];
-    await program.methods
+  const merchants = [
+    research.publicKey,
+    unknown.publicKey,
+    PublicKey.default,
+    PublicKey.default,
+    PublicKey.default,
+  ];
+  if (account) {
+    const matches = account.authority.equals(maria.publicKey) &&
+      account.agent.equals(agent.publicKey) && account.mint.equals(mint) &&
+      account.merchantCount === 2 &&
+      account.merchants.every((key, index) => key.equals(merchants[index]!)) &&
+      account.dailyLimit.eq(new anchor.BN(10_000_000)) &&
+      account.approvalThreshold.eq(new anchor.BN(1_000_000));
+    if (!matches) throw new Error('Existing vault configuration does not match this setup; refusing to fund it.');
+  } else {
+    const transaction = await program.methods
       .initialize(
         agent.publicKey,
         merchants,
@@ -217,14 +242,24 @@ async function main(): Promise<void> {
         systemProgram: SystemProgram.programId,
       })
       .signers([maria])
-      .rpc();
+      .transaction();
+    await provider.simulate(transaction, [maria]);
+    await confirmTransaction(transaction, {
+      action: 'Initialize Agent Vault', cluster: network,
+      feePayer: maria.publicKey.toBase58(),
+      recipients: [{ address: vault.toBase58() }, { address: vaultTokens.address.toBase58(), token: mint.toBase58() }],
+    });
+    await provider.sendAndConfirm(transaction, [maria]);
+  }
+
+  const vaultTokenAccount = await getAccount(connection, vaultTokens.address);
+  if (!vaultTokenAccount.owner.equals(vault) || !vaultTokenAccount.mint.equals(mint)) {
+    throw new Error('Vault token account does not match the validated vault and mint.');
   }
 
   const vaultBalance = await getAccount(connection, vaultTokens.address);
   if (vaultBalance.amount < 50_000_000n) {
-    await sendAndConfirmTransaction(
-      connection,
-      new Transaction().add(
+    const transaction = new Transaction().add(
         createTransferCheckedInstruction(
           mariaTokens.address,
           mint,
@@ -233,9 +268,14 @@ async function main(): Promise<void> {
           50_000_000,
           decimals,
         ),
-      ),
-      [maria],
-    );
+      );
+    await connection.simulateTransaction(transaction);
+    await confirmTransaction(transaction, {
+      action: 'Deposit demo tokens into Agent Vault', cluster: network,
+      feePayer: maria.publicKey.toBase58(),
+      recipients: [{ address: vaultTokens.address.toBase58(), amount: '50000000', token: mint.toBase58() }],
+    });
+    await sendAndConfirmTransaction(connection, transaction, [maria]);
   }
 
   const config: DemoConfig = {

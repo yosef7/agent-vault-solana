@@ -5,6 +5,7 @@ import * as anchor from '@coral-xyz/anchor';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { assertSolanaNetwork } from '../clients/js/src/network-guard.js';
+import { confirmTransaction } from './transaction-approval.js';
 
 const root = resolve(new URL('.', import.meta.url).pathname, '..');
 const config = JSON.parse(
@@ -46,7 +47,7 @@ const [receipt] = PublicKey.findProgramAddressSync(
   new PublicKey(config.programId),
 );
 const startedAt = performance.now();
-const signature = await program.methods
+const transaction = await program.methods
   .requestPayment(Array.from(requestHash), new anchor.BN(10_000))
   .accounts({
     vault: config.vault,
@@ -58,7 +59,14 @@ const signature = await program.methods
     tokenProgram: TOKEN_PROGRAM_ID,
     systemProgram: SystemProgram.programId,
   })
-  .rpc();
+  .transaction();
+const simulation = await provider.simulate(transaction, [agent]);
+await confirmTransaction(transaction, {
+  action: 'Submit demo payment request', cluster: config.cluster,
+  feePayer: agent.publicKey.toBase58(),
+  recipients: [{ address: config.merchantTokens.research, amount: '10000', token: config.mint }],
+});
+const signature = await provider.sendAndConfirm(transaction, [agent]);
 // B3: time from send to 'confirmed' and the real fee, for the README median.
 const confirmMs = Math.round(performance.now() - startedAt);
 const tx = await provider.connection.getTransaction(signature, {

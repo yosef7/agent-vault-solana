@@ -64,6 +64,12 @@ pub mod agent_vault {
             is_allowed_merchant(vault, ctx.accounts.merchant_tokens.owner),
             VaultError::WrongMerchant
         );
+        // Same rule as request_payment: anything above the owner's approval
+        // threshold must go through a Pending receipt and an owner co-sign.
+        require!(
+            amount <= vault.approval_threshold,
+            VaultError::ApprovalRequired
+        );
         let day = current_day(Clock::get()?.unix_timestamp)?;
         let new_spent = spending_after_payment(
             vault.day_index,
@@ -384,6 +390,7 @@ pub struct ApprovePayment<'info> {
     #[account(
         mut,
         token::mint = mint,
+        constraint = merchant_tokens.key() == receipt.merchant_tokens @ VaultError::WrongMerchant,
         constraint = merchant_tokens.owner == receipt.merchant @ VaultError::WrongMerchant
     )]
     pub merchant_tokens: Account<'info, TokenAccount>,
@@ -605,6 +612,8 @@ pub enum VaultError {
     InvalidMerchantCount,
     #[msg("A payment receipt is not pending")]
     ReceiptNotPending,
+    #[msg("Amount is above the approval threshold; use request_payment for owner approval")]
+    ApprovalRequired,
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@ import * as anchor from '@coral-xyz/anchor';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { assertSolanaNetwork } from '../../clients/js/src/network-guard.js';
+import { confirmTransaction } from '../../scripts/transaction-approval.js';
 
 type Scenario = '1' | '2' | '3';
 type Config = {
@@ -157,7 +158,15 @@ const transaction = await program.methods
     systemProgram: SystemProgram.programId,
   })
   .transaction();
-await provider.simulate(transaction, [agent]);
+const simulation = await provider.simulate(transaction, [agent]);
+await confirmTransaction(transaction, {
+  action: `Pay ${catalog[decision.api].name}`,
+  cluster: config.cluster, feePayer: agent.publicKey.toBase58(),
+  recipients: [{
+    address: config.merchantTokens[catalog[decision.api].merchant],
+    amount: String(decision.amount), token: config.mint,
+  }],
+});
 const signature = await provider.sendAndConfirm(transaction, [agent]);
 const result = await (program.account as unknown as {
   receipt: { fetch(address: PublicKey): Promise<{ status: unknown; reason: unknown; requestHash: number[] }> };

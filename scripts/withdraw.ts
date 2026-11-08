@@ -4,6 +4,7 @@ import * as anchor from '@coral-xyz/anchor';
 import { PublicKey } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { assertSolanaNetwork } from '../clients/js/src/network-guard.js';
+import { confirmTransaction } from './transaction-approval.js';
 
 const amount = process.argv[2];
 if (!amount || !/^[1-9]\d*$/.test(amount)) throw new Error('Usage: npm run withdraw -- <base units>');
@@ -17,6 +18,11 @@ const ownerTokens = await (await import('@solana/spl-token')).getAssociatedToken
 const transaction = await program.methods.ownerWithdraw(new anchor.BN(amount)).accounts({
   vault: config.vault, vaultTokens: config.vaultTokens, ownerTokens, mint: config.mint, authority: owner.publicKey, tokenProgram: TOKEN_PROGRAM_ID,
 }).transaction();
-await provider.simulate(transaction, [owner]);
+const simulation = await provider.simulate(transaction, [owner]);
+await confirmTransaction(transaction, {
+  action: 'Withdraw vault tokens', cluster: config.cluster,
+  feePayer: owner.publicKey.toBase58(),
+  recipients: [{ address: ownerTokens.toBase58(), amount, token: config.mint }],
+});
 const signature = await provider.sendAndConfirm(transaction, [owner]);
 console.log(JSON.stringify({ amount, signature }, null, 2));

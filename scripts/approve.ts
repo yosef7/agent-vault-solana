@@ -4,6 +4,7 @@ import * as anchor from '@coral-xyz/anchor';
 import { PublicKey } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { assertSolanaNetwork } from '../clients/js/src/network-guard.js';
+import { confirmTransaction } from './transaction-approval.js';
 
 const receiptArg = process.argv[2];
 if (!receiptArg) throw new Error('Usage: npm run approve -- <receipt PDA>');
@@ -23,13 +24,21 @@ const program = new anchor.Program(
 );
 const receipt = new PublicKey(receiptArg);
 const data = await (program.account as unknown as {
-  receipt: { fetch(address: PublicKey): Promise<{ merchantTokens: PublicKey }> };
+  receipt: { fetch(address: PublicKey): Promise<{ merchantTokens: PublicKey; amount: anchor.BN; status: unknown }> };
 }).receipt.fetch(receipt);
+if (!JSON.stringify(data.status).toLowerCase().includes('pending')) {
+  throw new Error('Only a pending receipt can be approved.');
+}
 const transaction = await program.methods.approvePayment().accounts({
   vault: config.vault, receipt, vaultTokens: config.vaultTokens,
   merchantTokens: data.merchantTokens, mint: config.mint, authority: owner.publicKey,
   tokenProgram: TOKEN_PROGRAM_ID,
 }).transaction();
-await provider.simulate(transaction, [owner]);
+const simulation = await provider.simulate(transaction, [owner]);
+await confirmTransaction(transaction, {
+  action: 'Approve pending vault payment', cluster: config.cluster,
+  feePayer: owner.publicKey.toBase58(),
+  recipients: [{ address: data.merchantTokens.toBase58(), amount: data.amount.toString(), token: config.mint }],
+});
 const signature = await provider.sendAndConfirm(transaction, [owner]);
 console.log(JSON.stringify({ receipt: receipt.toBase58(), signature, explorer: `https://explorer.solana.com/tx/${signature}?cluster=${config.cluster}` }, null, 2));
